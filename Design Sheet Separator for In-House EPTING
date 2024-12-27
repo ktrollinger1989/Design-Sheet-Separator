@@ -1,0 +1,199 @@
+import pandas as pd
+from openpyxl import Workbook
+from openpyxl.styles import Font, Border, Side, Alignment
+import re
+from datetime import datetime
+
+def load_excel(file_path):
+    """Loads an Excel document into a pandas DataFrame."""
+    try:
+        return pd.read_excel(file_path, header=None)
+    except Exception as e:
+        raise ValueError("Error loading the Excel file. Please check the file path and format.") from e
+
+def format_date(value):
+    """Formats a date value to MM/DD/YYYY."""
+    try:
+        if isinstance(value, str):
+            date_obj = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+        elif isinstance(value, datetime):
+            date_obj = value
+        else:
+            return value
+        return date_obj.strftime("%m/%d/%Y")
+    except (ValueError, TypeError):
+        return value
+
+def extract_left_quantity(row, key_index, max_offset=3, excluded_values=None):
+    """
+    Extracts the first non-empty value up to `max_offset` columns to the left of the key,
+    excluding any values in the `excluded_values` list.
+    """
+    if excluded_values is None:
+        excluded_values = []  # Default to an empty list if none provided
+
+    for offset in range(1, max_offset + 1):
+        left_index = key_index - offset
+        if left_index >= 0:  # Ensure we don't go out of bounds
+            left_value = row[left_index]
+            if (
+                pd.notna(left_value)
+                and isinstance(left_value, (int, float, str))
+                and str(left_value).strip() != ""
+                and str(left_value).strip().lower() not in [v.lower() for v in excluded_values]
+            ):
+                return str(left_value).strip()
+    return ""
+
+def transform_key(value):
+    """
+    Transforms specific keys based on rules.
+    """
+    if str(value).strip().upper() == "4RP2":
+        return "4RP24"
+    return str(value).strip()
+
+def extract_value(row, key_index, key_name, all_keys):
+    """Extracts the value associated with a key based on specific rules."""
+    if key_name == "LOT":
+        for offset in range(1, len(row) - key_index):
+            target_index = key_index + offset
+            if target_index < len(row) and pd.notna(row[target_index]):
+                value = row[target_index]
+                if re.match(r"^\d+\s+.+", str(value), re.IGNORECASE):
+                    return str(value).strip()
+    elif key_name == "DATE":
+        for offset in range(1, len(row) - key_index):
+            target_index = key_index + offset
+            if target_index < len(row) and pd.notna(row[target_index]):
+                return format_date(row[target_index])  # Ensure MM/DD/YYYY format
+    elif key_name == "BUILDER":
+        for offset in range(1, len(row) - key_index):
+            target_index = key_index + offset
+            if target_index < len(row) and pd.notna(row[target_index]):
+                value = row[target_index]
+                if re.match(r"^[A-Za-z\s]+$", str(value)):
+                    return str(value).strip()
+    elif key_name in ["AC", "FAU", "COIL", "HP", "AH"]:
+        for offset in range(1, 5):  # Limit search to 4 columns to the right
+            target_index = key_index + offset
+            if target_index < len(row) and pd.notna(row[target_index]):
+                value = str(row[target_index]).strip()
+                if (
+                    re.match(r"^[A-Za-z0-9\s\-]+$", value)  # Letters, numbers, spaces, or hyphens
+                    and not value.isdigit()  # Exclude numeric-only values
+                    and value.lower() not in [k.lower() for k in all_keys]  # Exclude other keys
+                ):
+                    return value
+    return ""
+
+def save_to_excel_with_left_quantities(output_path, layout, dataframe, all_keys):
+    """
+    Saves the provided data to a styled Excel document.
+    Handles two sets of dynamic keys with separate starting positions:
+    - Group 1: PLENUM, MIXING BOX, RETURN BOX, TRANSFER BOX, LINESET (Column A, Row 12)
+    - Group 2: 4RFA, 4RHW, ..., RED BRICK, 3/4 PVC, 1 1/8 PVC INSULATION, BLOCK (Column D, Row 12)
+    """
+    wb = Workbook()
+    ws = wb.active
+    header_font = Font(size=14, bold=True)
+    border = Border(left=Side(style='thin'), right=Side(style='thin'),
+                    top=Side(style='thin'), bottom=Side(style='thin'))
+    alignment = Alignment(horizontal="center", vertical="center")
+
+    # Add the main keys and their values
+    for key, (row, col) in layout.items():
+        associated_data = ""
+        for index, df_row in dataframe.iterrows():
+            for col_index, value in enumerate(df_row):
+                transformed_key = transform_key(value)
+                if transformed_key.lower() == key.strip().lower():
+                    associated_data = extract_value(df_row, col_index, key, all_keys)
+                    break
+        ws.cell(row=row, column=col, value=key).font = header_font
+        ws.cell(row=row, column=col + 1, value=associated_data).alignment = alignment
+
+    # Leave Row 11 blank
+    blank_row = 11
+
+    # Group 1: Keys starting at Column A, Row 12
+    current_row_a = 12
+    excluded_values = ["flex"]  # List of excluded values
+    group_1_patterns = ["PLENUM", "MIXING BOX", "RETURN BOX", "TRANSFER BOX", "LINESET"]
+
+    for index, df_row in dataframe.iterrows():
+        for col_index, value in enumerate(df_row):
+            transformed_key = transform_key(value)
+            value_str = str(transformed_key).strip().lower()
+            # Skip "LINESET" keys with "FLASHING"
+            if "lineset" in value_str and "flashing" in value_str:
+                continue
+            if any(pattern.lower() in value_str for pattern in group_1_patterns):
+                quantity = extract_left_quantity(df_row, col_index, excluded_values=excluded_values)
+                ws.cell(row=current_row_a, column=1, value=transformed_key).font = Font(size=12)
+                ws.cell(row=current_row_a, column=2, value=quantity).font = Font(size=12)
+                ws.cell(row=current_row_a, column=2).alignment = alignment
+                current_row_a += 1
+
+    # Group 2: Keys starting at Column D, Row 12
+    current_row_d = 12
+    group_2_patterns = [
+        "4RFA", "4RHW", "4RS", "4RP5", "4RP4", "4RP3", "4RP18", "4RP12", "4RPA", "4RP6",
+        "4REA90", "4RP24", "DRAIN PAN", "RED BRICK", "3/4 PVC", "1 1/8 PVC INSULATION", "BLOCK", "PAD"
+    ]
+
+    for index, df_row in dataframe.iterrows():
+        for col_index, value in enumerate(df_row):
+            transformed_key = transform_key(value)
+            value_str = str(transformed_key).strip().lower()
+            if any(pattern.lower() in value_str for pattern in group_2_patterns):
+                quantity = extract_left_quantity(df_row, col_index, excluded_values=excluded_values)
+                ws.cell(row=current_row_d, column=4, value=transformed_key).font = Font(size=12)
+                ws.cell(row=current_row_d, column=5, value=quantity).font = Font(size=12)
+                ws.cell(row=current_row_d, column=5).alignment = alignment
+                current_row_d += 1
+
+    # Auto-format column widths
+    for column_cells in ws.columns:
+        max_length = 0
+        col_letter = column_cells[0].column_letter  # Get the column letter
+        for cell in column_cells:
+            try:
+                if cell.value:  # Ensure cell has a value
+                    max_length = max(max_length, len(str(cell.value)))
+            except:
+                pass
+        adjusted_width = max_length + 2  # Add some padding
+        ws.column_dimensions[col_letter].width = adjusted_width
+
+    # Apply border styling
+    for row in ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=ws.max_column):
+        for cell in row:
+            cell.border = border
+
+    wb.save(output_path)
+
+def main():
+    input_file_path = "/content/37 STONEHAVEN.xlsx"
+    output_file_path = "/content/37 Stonehaven In House Pull.xlsx"
+
+    data = load_excel(input_file_path)
+
+    layout = {
+        "LOT": (1, 1),
+        "DATE": (2, 1),
+        "BUILDER": (3, 1),
+        "TECH": (4, 1),
+        "AC": (6, 1),
+        "FAU": (7, 1),
+        "COIL": (8, 1),
+        "HP": (9, 1),
+        "AH": (10, 1),
+    }
+
+    all_keys = set(layout.keys())
+
+    save_to_excel_with_left_quantities(output_file_path, layout, data, all_keys)
+
+if __name__ == "__main__":
+    main()

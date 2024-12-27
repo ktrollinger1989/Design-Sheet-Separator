@@ -25,16 +25,13 @@ def format_date(value):
         return value
 
 def extract_left_quantity(row, key_index, max_offset=3, excluded_values=None):
-    """
-    Extracts the first non-empty value up to `max_offset` columns to the left of the key,
-    excluding any values in the `excluded_values` list.
-    """
+    """Extracts the first non-empty value up to `max_offset` columns to the left of the key."""
     if excluded_values is None:
-        excluded_values = []  # Default to an empty list if none provided
+        excluded_values = []
 
     for offset in range(1, max_offset + 1):
         left_index = key_index - offset
-        if left_index >= 0:  # Ensure we don't go out of bounds
+        if left_index >= 0:
             left_value = row[left_index]
             if (
                 pd.notna(left_value)
@@ -46,21 +43,13 @@ def extract_left_quantity(row, key_index, max_offset=3, excluded_values=None):
     return ""
 
 def transform_key(value):
-    """
-    Transforms specific keys based on rules.
-    """
+    """Transforms specific keys based on rules."""
     if str(value).strip().upper() == "4RP2":
         return "4RP24"
     return str(value).strip()
 
 def save_to_excel_with_left_quantities(output_path, layout, dataframe, all_keys):
-    """
-    Saves the provided data to a styled Excel document.
-    Handles three sets of dynamic keys with separate starting positions:
-    - Group 1: PLENUM, MIXING BOX, RETURN BOX, TRANSFER BOX, LINESET (Column A, Row 12)
-    - Group 2: Keys like 4RFA, ..., BLOCK (Column D, Row 12)
-    - Group 3: HARD PIPE, SOFFIT CAP, 4" R 4.2, etc. (Column G, Row 12)
-    """
+    """Saves the provided data to a styled Excel document."""
     wb = Workbook()
     ws = wb.active
     header_font = Font(size=14, bold=True)
@@ -80,27 +69,24 @@ def save_to_excel_with_left_quantities(output_path, layout, dataframe, all_keys)
         ws.cell(row=row, column=col, value=key).font = header_font
         ws.cell(row=row, column=col + 1, value=associated_data).alignment = alignment
 
-    # Leave Row 11 blank
-    blank_row = 11
-
     # Group 1: Keys starting at Column A, Row 12
     current_row_a = 12
-    excluded_values = ["flex"]  # List of excluded values
+    excluded_values = ["flex"]
     group_1_patterns = ["PLENUM", "MIXING BOX", "RETURN BOX", "TRANSFER BOX", "LINESET"]
 
     for index, df_row in dataframe.iterrows():
         for col_index, value in enumerate(df_row):
             transformed_key = transform_key(value)
             value_str = str(transformed_key).strip().lower()
-            # Skip "LINESET" keys with "FLASHING"
             if "lineset" in value_str and "flashing" in value_str:
                 continue
             if any(pattern.lower() in value_str for pattern in group_1_patterns):
                 quantity = extract_left_quantity(df_row, col_index, excluded_values=excluded_values)
-                ws.cell(row=current_row_a, column=1, value=transformed_key).font = Font(size=12)
-                ws.cell(row=current_row_a, column=2, value=quantity).font = Font(size=12)
-                ws.cell(row=current_row_a, column=2).alignment = alignment
-                current_row_a += 1
+                if quantity:  # Only include rows with a valid quantity
+                    ws.cell(row=current_row_a, column=1, value=transformed_key).font = Font(size=12)
+                    ws.cell(row=current_row_a, column=2, value=quantity).font = Font(size=12)
+                    ws.cell(row=current_row_a, column=2).alignment = alignment
+                    current_row_a += 1
 
     # Group 2: Keys starting at Column D, Row 12
     current_row_d = 12
@@ -115,10 +101,11 @@ def save_to_excel_with_left_quantities(output_path, layout, dataframe, all_keys)
             value_str = str(transformed_key).strip().lower()
             if any(pattern.lower() in value_str for pattern in group_2_patterns):
                 quantity = extract_left_quantity(df_row, col_index, excluded_values=excluded_values)
-                ws.cell(row=current_row_d, column=4, value=transformed_key).font = Font(size=12)
-                ws.cell(row=current_row_d, column=5, value=quantity).font = Font(size=12)
-                ws.cell(row=current_row_d, column=5).alignment = alignment
-                current_row_d += 1
+                if quantity:  # Only include rows with a valid quantity
+                    ws.cell(row=current_row_d, column=4, value=transformed_key).font = Font(size=12)
+                    ws.cell(row=current_row_d, column=5, value=quantity).font = Font(size=12)
+                    ws.cell(row=current_row_d, column=5).alignment = alignment
+                    current_row_d += 1
 
     # Group 3: Keys starting at Column G, Row 12
     current_row_g = 12
@@ -137,28 +124,48 @@ def save_to_excel_with_left_quantities(output_path, layout, dataframe, all_keys)
                     transformed_key += " FLEX"
             if any(pattern.lower() in value_str for pattern in group_3_patterns):
                 quantity = extract_left_quantity(df_row, col_index, excluded_values=excluded_values)
-                ws.cell(row=current_row_g, column=7, value=transformed_key).font = Font(size=12)
-                ws.cell(row=current_row_g, column=8, value=quantity).font = Font(size=12)
-                ws.cell(row=current_row_g, column=8).alignment = alignment
-                current_row_g += 1
+                if quantity:  # Only include rows with a valid quantity
+                    ws.cell(row=current_row_g, column=7, value=transformed_key).font = Font(size=12)
+                    ws.cell(row=current_row_g, column=8, value=quantity).font = Font(size=12)
+                    ws.cell(row=current_row_g, column=8).alignment = alignment
+                    current_row_g += 1
 
     # Auto-format column widths
     for column_cells in ws.columns:
         max_length = 0
-        col_letter = column_cells[0].column_letter  # Get the column letter
+        col_letter = column_cells[0].column_letter
         for cell in column_cells:
             try:
-                if cell.value:  # Ensure cell has a value
+                if cell.value:
                     max_length = max(max_length, len(str(cell.value)))
             except:
                 pass
-        adjusted_width = max_length + 2  # Add some padding
+        adjusted_width = max_length + 2
         ws.column_dimensions[col_letter].width = adjusted_width
 
-    # Apply border styling
+    # Apply border styling with exceptions for irrelevant cells
     for row in ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=ws.max_column):
         for cell in row:
-            cell.border = border
+            if cell.value is None or str(cell.value).strip() == "":
+                # Remove borders for irrelevant cells
+                cell.border = None
+            elif cell.column_letter == "C":
+                # Apply only left and right borders for Column C
+                cell.border = Border(left=Side(style='thin'), right=Side(style='thin'))
+            elif cell.row in [5, 11]:
+                # Outline borders only for Rows 5 and 11
+                if cell.column == 1:  # Left-most cell
+                    cell.border = Border(left=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+                elif cell.column == ws.max_column:  # Right-most cell
+                    cell.border = Border(right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+                else:  # Middle cells
+                    cell.border = Border(top=Side(style='thin'), bottom=Side(style='thin'))
+            else:
+                # Apply standard border to all other cells
+                cell.border = border
+
+    # Always ensure Column B, Row 4 has borders
+    ws.cell(row=4, column=2).border = border
 
     wb.save(output_path)
 

@@ -27,7 +27,6 @@ def format_date(value):
 def extract_value(row, key_index, key_name, all_keys):
     """Extracts the value associated with a key based on specific rules."""
     if key_name in ["AC", "FAU", "COIL", "HP", "AH"]:
-        # Description is in the cell immediately to the right
         target_index = key_index + 1
         if target_index < len(row) and pd.notna(row[target_index]):
             return str(row[target_index]).strip()
@@ -72,7 +71,6 @@ def save_to_excel_with_left_quantities(output_path, layout, dataframe, all_keys)
         ws.cell(row=row, column=col, value=key).font = header_font
         ws.cell(row=row, column=col + 1, value=associated_data).alignment = alignment
 
-    # Group 1: Keys starting at Column A, Row 12
     current_row_a = 12
     excluded_values = ["flex"]
     group_1_patterns = ["PLENUM", "MIXING BOX", "RETURN BOX", "TRANSFER BOX", "LINESET"]
@@ -91,7 +89,6 @@ def save_to_excel_with_left_quantities(output_path, layout, dataframe, all_keys)
                 ws.cell(row=current_row_a, column=2).alignment = alignment
                 current_row_a += 1
 
-    # Group 2: Keys starting at Column D, Row 12
     current_row_d = 12
     group_2_patterns = [
         "4RFA", "4RHW", "4RS", "4RP5", "4RP4", "4RP3", "4RP18", "4RP12", "4RPA", "4RP6",
@@ -110,7 +107,6 @@ def save_to_excel_with_left_quantities(output_path, layout, dataframe, all_keys)
                 ws.cell(row=current_row_d, column=5).alignment = alignment
                 current_row_d += 1
 
-    # Auto-format column widths
     for column_cells in ws.columns:
         max_length = 0
         col_letter = column_cells[0].column_letter
@@ -130,26 +126,33 @@ def save_to_excel_with_left_quantities(output_path, layout, dataframe, all_keys)
     wb.save(output_path)
 
 def main():
-    input_file_path = "input file path"
-    output_file_path = "output file path"
+    print("Welcome to the Excel Processor!")
+    input_file_path = input("Enter the path to the input Excel file: ").strip()
+    output_file_path = input("Enter the path to save the processed Excel file: ").strip()
 
-    data = load_excel(input_file_path)
+    try:
+        data = load_excel(input_file_path)
 
-    layout = {
-        "LOT": (1, 1),
-        "DATE": (2, 1),
-        "BUILDER": (3, 1),
-        "TECH": (4, 1),
-        "AC": (6, 1),
-        "FAU": (7, 1),
-        "COIL": (8, 1),
-        "HP": (9, 1),
-        "AH": (10, 1),
-    }
+        layout = {
+            "LOT": (1, 1),
+            "DATE": (2, 1),
+            "BUILDER": (3, 1),
+            "TECH": (4, 1),
+            "AC": (6, 1),
+            "FAU": (7, 1),
+            "COIL": (8, 1),
+            "HP": (9, 1),
+            "AH": (10, 1),
+        }
 
-    all_keys = set(layout.keys())
+        all_keys = set(layout.keys())
 
-    save_to_excel_with_left_quantities(output_file_path, layout, data, all_keys)
+        save_to_excel_with_left_quantities(output_file_path, layout, data, all_keys)
+
+        print(f"Processing complete! File saved to {output_file_path}")
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
     main()

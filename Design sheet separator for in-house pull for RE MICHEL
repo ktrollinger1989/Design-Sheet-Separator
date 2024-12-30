@@ -170,8 +170,8 @@ def save_to_excel_with_left_quantities(output_path, layout, dataframe, all_keys)
     wb.save(output_path)
 
 def main():
-    input_file_path = "/content/69 STEEPLE GATE.xlsx"
-    output_file_path = "/content/In House 69 Steeple Gate.xlsx"
+    input_file_path = "input file path"
+    output_file_path = "output file path"
 
     data = load_excel(input_file_path)
 

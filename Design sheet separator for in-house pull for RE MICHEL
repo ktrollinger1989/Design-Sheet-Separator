@@ -130,48 +130,12 @@ def save_to_excel_with_left_quantities(output_path, layout, dataframe, all_keys)
                     ws.cell(row=current_row_g, column=8).alignment = alignment
                     current_row_g += 1
 
-    # Auto-format column widths
-    for column_cells in ws.columns:
-        max_length = 0
-        col_letter = column_cells[0].column_letter
-        for cell in column_cells:
-            try:
-                if cell.value:
-                    max_length = max(max_length, len(str(cell.value)))
-            except:
-                pass
-        adjusted_width = max_length + 2
-        ws.column_dimensions[col_letter].width = adjusted_width
-
-    # Apply border styling with exceptions for irrelevant cells
-    for row in ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=ws.max_column):
-        for cell in row:
-            if cell.value is None or str(cell.value).strip() == "":
-                # Remove borders for irrelevant cells
-                cell.border = None
-            elif cell.column_letter == "C":
-                # Apply only left and right borders for Column C
-                cell.border = Border(left=Side(style='thin'), right=Side(style='thin'))
-            elif cell.row in [5, 11]:
-                # Outline borders only for Rows 5 and 11
-                if cell.column == 1:  # Left-most cell
-                    cell.border = Border(left=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
-                elif cell.column == ws.max_column:  # Right-most cell
-                    cell.border = Border(right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
-                else:  # Middle cells
-                    cell.border = Border(top=Side(style='thin'), bottom=Side(style='thin'))
-            else:
-                # Apply standard border to all other cells
-                cell.border = border
-
-    # Always ensure Column B, Row 4 has borders
-    ws.cell(row=4, column=2).border = border
-
     wb.save(output_path)
 
 def main():
-    input_file_path = "input file path"
-    output_file_path = "output file path"
+    print("Welcome to the Design Sheet Separator Program!")
+    input_file_path = input("Please provide the full path to the input Excel file: ")
+    output_file_path = input("Please provide the full path to save the output Excel file: ")
 
     data = load_excel(input_file_path)
 
@@ -190,6 +154,7 @@ def main():
     all_keys = set(layout.keys())
 
     save_to_excel_with_left_quantities(output_file_path, layout, data, all_keys)
+    print(f"Data successfully processed and saved to: {output_file_path}")
 
 if __name__ == "__main__":
     main()

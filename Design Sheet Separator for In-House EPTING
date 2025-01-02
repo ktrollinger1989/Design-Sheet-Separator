@@ -1,3 +1,4 @@
+import streamlit as st
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Font, Border, Side, Alignment
@@ -6,10 +7,7 @@ import re
 
 def load_excel(file_path):
     """Loads an Excel document into a pandas DataFrame."""
-    try:
-        return pd.read_excel(file_path, header=None)
-    except Exception as e:
-        raise ValueError("Error loading the Excel file. Please check the file path and format.") from e
+    return pd.read_excel(file_path, header=None)
 
 def format_date(value):
     """Formats a date value to MM/DD/YYYY."""
@@ -71,88 +69,31 @@ def save_to_excel_with_left_quantities(output_path, layout, dataframe, all_keys)
         ws.cell(row=row, column=col, value=key).font = header_font
         ws.cell(row=row, column=col + 1, value=associated_data).alignment = alignment
 
-    current_row_a = 12
-    excluded_values = ["flex"]
-    group_1_patterns = ["PLENUM", "MIXING BOX", "RETURN BOX", "TRANSFER BOX", "LINESET"]
-
-    for index, df_row in dataframe.iterrows():
-        for col_index, value in enumerate(df_row):
-            transformed_key = str(value).strip().upper()
-            if "lineset" in transformed_key.lower() and "flashing" in transformed_key.lower():
-                continue
-            if any(pattern.lower() in transformed_key.lower() for pattern in group_1_patterns):
-                quantity = extract_left_quantity(df_row, col_index, excluded_values=excluded_values)
-                if not quantity:
-                    continue
-                ws.cell(row=current_row_a, column=1, value=transformed_key).font = Font(size=12)
-                ws.cell(row=current_row_a, column=2, value=quantity).font = Font(size=12)
-                ws.cell(row=current_row_a, column=2).alignment = alignment
-                current_row_a += 1
-
-    current_row_d = 12
-    group_2_patterns = [
-        "4RFA", "4RHW", "4RS", "4RP5", "4RP4", "4RP3", "4RP18", "4RP12", "4RPA", "4RP6",
-        "4REA90", "4RP24", "DRAIN PAN", "RED BRICK", "3/4 PVC", "1 1/8 PVC INSULATION", "BLOCK", "PAD"
-    ]
-
-    for index, df_row in dataframe.iterrows():
-        for col_index, value in enumerate(df_row):
-            transformed_key = str(value).strip().upper()
-            if any(pattern.lower() in transformed_key.lower() for pattern in group_2_patterns):
-                quantity = extract_left_quantity(df_row, col_index, excluded_values=excluded_values)
-                if not quantity:
-                    continue
-                ws.cell(row=current_row_d, column=4, value=transformed_key).font = Font(size=12)
-                ws.cell(row=current_row_d, column=5, value=quantity).font = Font(size=12)
-                ws.cell(row=current_row_d, column=5).alignment = alignment
-                current_row_d += 1
-
-    for column_cells in ws.columns:
-        max_length = 0
-        col_letter = column_cells[0].column_letter
-        for cell in column_cells:
-            try:
-                if cell.value:
-                    max_length = max(max_length, len(str(cell.value)))
-            except:
-                pass
-        adjusted_width = max_length + 2
-        ws.column_dimensions[col_letter].width = adjusted_width
-
-    for row in ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=ws.max_column):
-        for cell in row:
-            cell.border = border
-
     wb.save(output_path)
 
-def main():
-    print("Welcome to the Excel Processor!")
-    input_file_path = input("Enter the path to the input Excel file: ").strip()
-    output_file_path = input("Enter the path to save the processed Excel file: ").strip()
+# Streamlit Application
+st.title("Excel Processor App")
 
-    try:
-        data = load_excel(input_file_path)
+uploaded_file = st.file_uploader("Upload an Excel file", type=["xlsx"])
+if uploaded_file:
+    st.success("File uploaded successfully!")
+    data = load_excel(uploaded_file)
+    st.write("Preview of Uploaded Data:", data.head())
 
-        layout = {
-            "LOT": (1, 1),
-            "DATE": (2, 1),
-            "BUILDER": (3, 1),
-            "TECH": (4, 1),
-            "AC": (6, 1),
-            "FAU": (7, 1),
-            "COIL": (8, 1),
-            "HP": (9, 1),
-            "AH": (10, 1),
-        }
+    layout = {
+        "LOT": (1, 1),
+        "DATE": (2, 1),
+        "BUILDER": (3, 1),
+        "TECH": (4, 1),
+        "AC": (6, 1),
+        "FAU": (7, 1),
+        "COIL": (8, 1),
+        "HP": (9, 1),
+        "AH": (10, 1),
+    }
 
+    output_path = st.text_input("Enter a path to save the processed Excel file:")
+    if st.button("Process Excel File"):
         all_keys = set(layout.keys())
-
-        save_to_excel_with_left_quantities(output_file_path, layout, data, all_keys)
-
-        print(f"Processing complete! File saved to {output_file_path}")
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
-
-if __name__ == "__main__":
-    main()
+        save_to_excel_with_left_quantities(output_path, layout, data, all_keys)
+        st.success(f"Processing complete! File saved to {output_path}")
